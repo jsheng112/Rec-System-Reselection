@@ -22,12 +22,12 @@ import scipy.sparse as sp
 random.seed(415)
 
 # read in test results
-test_results = pd.read_csv('/content/drive/My Drive/iw_data/nmf_test_results_with_personalized_reranking_results_ten_percent_full_5050.csv')
+test_results = pd.read_csv('test_results_with_personalized_reranking_results_added')
 test_results = pd.DataFrame(test_results, columns=['userId', 'actual', 'cf_predictions', 'cf_predictions_10','personalized_reranking_predictions'])
 
 # read in training data and testing data 
-train_data = pd.read_csv('/content/drive/My Drive/iw_data/data_train_split_5050.csv')
-test_data = pd.read_csv('/content/drive/My Drive/iw_data/data_test_split_5050.csv')
+train_data = pd.read_csv('data_train_set.csv')
+test_data = pd.read_csv('data_test_set.csv')
 
 # combine training and testing data 
 train_test_data = [train_data, test_data]
@@ -88,8 +88,8 @@ df_short_head = df_movies_count_ratings.nlargest(short_head, 'count')['movieId']
 df_long_tail = df_movies_count_ratings.nsmallest(total_num-short_head, 'count')['movieId'].unique()
 
 # create movie tag relevance matrix
-tagId_filename = '/content/drive/My Drive/iw_data/genome-scores.csv'
-tags_filename = '/content/drive/My Drive/iw_data/genome-tags.csv'
+tagId_filename = 'genome-scores.csv'
+tags_filename = 'genome-tags.csv'
 
 unique_movies = ratings.movieId.unique()
 df_tag_id = pd.read_csv(tagId_filename, usecols=['movieId', 'tagId', 'relevance'],dtype={'movieId': 'int32','tagId': 'int32', 'relevance': 'float32'})
@@ -116,7 +116,7 @@ def random_walk(movieId, model, beta):
   return r
 
 # read in user preference csv
-df_user_prefs = pd.read_csv("/content/drive/My Drive/iw_data/user_preferences_test_results_ten_percent_nmf_5050.csv")
+df_user_prefs = pd.read_csv("user_preferences.csv")
 df_user_prefs=df_user_prefs.set_index("userId")
 user_mean = df_user_prefs['short_head_prefs'].mean()
 
@@ -275,7 +275,7 @@ print('cf: ', cf_personalization)
 
 # organize movie features
 rated_movies = ratings.movieId.tolist()
-movies = pd.read_csv('/content/drive/My Drive/iw_data/movies.csv')
+movies = pd.read_csv('movies.csv')
 movies = movies.query('movieId in @rated_movies').set_index("movieId", inplace=True, drop=True)
 movies = movies.genres.str.split("|", expand=True).reset_index(inplace=True)
 movies = pd.melt(movies, id_vars='movieId', value_vars=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])

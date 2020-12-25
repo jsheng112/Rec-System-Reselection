@@ -19,7 +19,7 @@ from surprise.model_selection import GridSearchCV
 import random
 random.seed(415)
 
-original_ratings = pd.read_csv('/content/drive/My Drive/iw_data/ratings.csv')
+original_ratings = pd.read_csv('ratings.csv')
 original_ratings.reset_index(drop=True, inplace=True)
 
 # only include movies with at least n ratings
