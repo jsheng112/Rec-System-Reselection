@@ -11,7 +11,6 @@ Original file is located at
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from surprise import Reader, SVD, Dataset
 import os
 from sklearn.model_selection import train_test_split
 import heapq 
@@ -22,7 +21,7 @@ import scipy.sparse as sp
 random.seed(415)
 
 # read in test results
-test_results = pd.read_csv('test_results_with_personalized_reranking_results_added')
+test_results = pd.read_csv('test_results_with_personalized_reranking_results_added.csv')
 test_results = pd.DataFrame(test_results, columns=['userId', 'actual', 'cf_predictions', 'cf_predictions_10','personalized_reranking_predictions'])
 
 # read in training data and testing data 
@@ -97,6 +96,8 @@ df_tag_id = df_tag_id.loc[df_tag_id['movieId'].isin(unique_movies)]
 df_tags = pd.read_csv(tags_filename, usecols=['tagId', 'tag'],dtype={'tagId': 'int32', 'tag': 'str'})
 unique_tag_id = df_tag_id['tagId'].unique().tolist()
 df_movie_tag_relevance = df_tag_id.pivot(index='movieId', columns='tagId', values='relevance')
+
+df_tag_id.tagId.unique()
 
 # random walk helper function, performs random walk with restart using restart
 # probability beta until convergence
@@ -185,8 +186,8 @@ actual = list(test_results.actual.values)
 
 # helper function to calculate prediction coverage
 def prediction_coverage(predictions, all_items):
-  predictions = [p for l in predictions for p in l]
-  prediction_coverage = round(len(set(predictions))/(len(all_items)* 1.0)*100,2)
+  predictions = set([j for i in predictions for j in i])
+  prediction_coverage = len(predictions)/(len(all_items)*1.0)
   return prediction_coverage
 
 # calculat prediction coverage
@@ -200,8 +201,8 @@ print('cf: ', cf_coverage)
 
 # calculate long tail coverage
 def long_tail_coverage(predictions, df_long_tail) :
-  predictions = [p for l in predictions for p in l if p in df_long_tail]
-  prediction_coverage = round(len(set(predictions))/(len(df_long_tail)* 1.0)*100,2)
+  predictions = set([j for i in predictions for j in i if j in df_long_tail])
+  prediction_coverage = len(predictions)/(len(df_long_tail)*1.0)
   return prediction_coverage
 
 
@@ -214,16 +215,13 @@ print('cf: ', cf_coverage_long_tail)
 
 # helper function to calculate novelty
 def novelty(predictions, movie_counts, num_users, len_list):
-  mean_self_information = []
-  k = 0
+  self_info = []
   for l in predictions:
-      self_information = 0
-      for i in l:
-          self_information += np.sum(-np.log2(movie_counts[i]/num_users))
-      mean_self_information.append(self_information/len_list)
-      k += 1
-  novelty = sum(mean_self_information)/k
-  return novelty
+    info = 0
+    for i in l:
+      info += np.sum(-np.log2(movie_counts[i]/num_users))
+    self_info.append(info/len_list)
+  return sum(self_info)/len(predictions)
 
 
 movie_counts = dict(ratings.movieId.value_counts())
@@ -254,17 +252,14 @@ print('cf: ', cf_mapk)
 # helper function to calculate personalization
 def personalization(predictions):
   # create sparse matrix
-  predictions = np.array(predictions)
   sparse_matrix = pd.DataFrame(data=predictions).reset_index().melt(id_vars='index', value_name='movies')
-  sparse_matrix = sparse_matrix[['index', 'movies']].pivot(index='index', columns='movies', values='movies')
-  sparse_matrix = pd.notna(sparse_matrix)*1
+  sparse_matrix = pd.notna(sparse_matrix[['index', 'movies']].pivot(index='index', columns='movies', values='movies'))
   sparse_matrix = sp.csr_matrix(sparse_matrix.values)
 
   # calculate cosine similarity of upper triangle
   similarity = cosine_similarity(X=sparse_matrix, dense_output=False)
   upper_triangle = np.triu_indices(similarity.shape[0], k=1)
-  personalization = 1- np.mean(similarity[upper_triangle])
-  return personalization
+  return 1 - np.mean(similarity[upper_triangle])
 
 rwr_personalization = personalization(rwr_recs)
 pr_personalization = personalization(pr_predictions)
@@ -276,25 +271,24 @@ print('cf: ', cf_personalization)
 # organize movie features
 rated_movies = ratings.movieId.tolist()
 movies = pd.read_csv('movies.csv')
-movies = movies.query('movieId in @rated_movies').set_index("movieId", inplace=True, drop=True)
-movies = movies.genres.str.split("|", expand=True).reset_index(inplace=True)
+movies = movies.query('movieId in @rated_movies').set_index("movieId", inplace=False, drop=True)
+movies = movies.genres.str.split("|", expand=True).reset_index(inplace=False)
 movies = pd.melt(movies, id_vars='movieId', value_vars=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-movies.drop_duplicates("movieId", inplace=True).set_index('movieId', inplace=True)
+movies = movies.drop_duplicates("movieId", inplace=False).set_index('movieId', inplace=False)
 movies = pd.get_dummies(movies.value)
 
 # helper function to calculate intra-list similarity
 def ils(predictions, movies):
-  movies = movies.fillna(0)
   ils = []
   for u in range(len(predictions)):
     # create sparse matrix
-    sparse_matrix = movies.loc[predictions[u]].dropna()
+    sparse_matrix = movies.loc[predictions[u]]
     sparse_matrix = sp.csr_matrix(sparse_matrix.values)
+    
     # calculate cosine similarity
     similarity = cosine_similarity(X=sparse_matrix, dense_output=False)
     upper_triangle = np.triu_indices(similarity.shape[0], k=1)
-    user_ils = np.mean(similarity[upper_triangle])
-    ils.append(user_ils)
+    ils.append(np.mean(similarity[upper_triangle]))
   return np.mean(ils)
 
 rwr_similarity = ils(rwr_recs, movies)
